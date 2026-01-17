@@ -26,6 +26,8 @@ export default function Catalog() {
     coverImageUrl: "",
     publishedYear: "",
   });
+  const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string>("");
 
   const { data: categories } = trpc.categories.list.useQuery();
   const { data: authors } = trpc.authors.list.useQuery();
@@ -41,6 +43,7 @@ export default function Catalog() {
     { enabled: true }
   );
   const createBookMutation = trpc.books.create.useMutation();
+  const uploadCoverMutation = trpc.books.uploadCover.useMutation();
 
   const { data: books, isLoading } = trpc.books.search.useQuery(
     {
@@ -60,6 +63,18 @@ export default function Catalog() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleCoverImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCoverImageFile(file);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setCoverPreview(event.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSubmitBook = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -76,6 +91,30 @@ export default function Catalog() {
 
     setIsSubmitting(true);
     try {
+      let coverImageUrl = formData.coverImageUrl;
+
+      if (coverImageFile) {
+        const reader = new FileReader();
+        const uploadPromise = new Promise<string>((resolve, reject) => {
+          reader.onload = async (event) => {
+            try {
+              const base64 = (event.target?.result as string).split(",")[1];
+              const uploadResult = await uploadCoverMutation.mutateAsync({
+                fileName: coverImageFile.name,
+                fileData: base64,
+                mimeType: coverImageFile.type,
+              });
+              resolve(uploadResult.url);
+            } catch (error) {
+              reject(error);
+            }
+          };
+          reader.onerror = () => reject(new Error("Failed to read file"));
+          reader.readAsDataURL(coverImageFile);
+        });
+        coverImageUrl = await uploadPromise;
+      }
+
       await createBookMutation.mutateAsync({
         title: formData.title,
         description: formData.description,
@@ -85,7 +124,7 @@ export default function Catalog() {
         price: formData.price,
         stock: parseInt(formData.stock) || 0,
         isbn: formData.isbn,
-        coverImageUrl: formData.coverImageUrl,
+        coverImageUrl: coverImageUrl,
         publishedYear: formData.publishedYear
           ? parseInt(formData.publishedYear)
           : undefined,
@@ -104,6 +143,8 @@ export default function Catalog() {
         coverImageUrl: "",
         publishedYear: "",
       });
+      setCoverImageFile(null);
+      setCoverPreview("");
       setShowAddForm(false);
       refetchBooks();
     } catch (error) {
@@ -131,6 +172,8 @@ export default function Catalog() {
       coverImageUrl: "",
       publishedYear: "",
     });
+    setCoverImageFile(null);
+    setCoverPreview("");
     setShowAddForm(false);
   };
 
@@ -318,7 +361,19 @@ export default function Catalog() {
 
               <div>
                 <label className="block text-sm font-medium mb-2">
-                  URL Gambar Cover
+                  Upload Gambar Cover (Pilihan 1)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleCoverImageChange}
+                  className="w-full border border-border px-3 py-2 rounded text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Atau Gunakan URL Gambar (Pilihan 2)
                 </label>
                 <Input
                   type="url"
@@ -329,13 +384,13 @@ export default function Catalog() {
                 />
               </div>
 
-              {formData.coverImageUrl && (
+              {(coverPreview || formData.coverImageUrl) && (
                 <div>
                   <label className="block text-sm font-medium mb-2">
                     Preview Gambar
                   </label>
                   <img
-                    src={formData.coverImageUrl}
+                    src={coverPreview || formData.coverImageUrl}
                     alt="Preview"
                     className="w-32 h-48 object-cover border border-border rounded"
                   />
@@ -429,7 +484,7 @@ export default function Catalog() {
             {authors && authors.length > 0 && (
               <div>
                 <h3 className="font-semibold mb-4">Penulis</h3>
-                <div className="space-y-2 max-h-64 overflow-y-auto">
+                <div className="space-y-2">
                   <button
                     onClick={() => setSelectedAuthor(undefined)}
                     className={`block w-full text-left px-3 py-2 rounded text-sm transition-colors ${
@@ -461,7 +516,7 @@ export default function Catalog() {
             {publishers && publishers.length > 0 && (
               <div>
                 <h3 className="font-semibold mb-4">Penerbit</h3>
-                <div className="space-y-2 max-h-64 overflow-y-auto">
+                <div className="space-y-2">
                   <button
                     onClick={() => setSelectedPublisher(undefined)}
                     className={`block w-full text-left px-3 py-2 rounded text-sm transition-colors ${
@@ -548,18 +603,18 @@ export default function Catalog() {
                     <h4 className="font-semibold text-sm line-clamp-2 mb-2">
                       {book.title}
                     </h4>
-                    <p className="text-xs text-muted-foreground mb-3">
-                      {book.stock > 0 ? "Tersedia" : "Habis"}
+                    <p className="text-xs text-muted-foreground mb-2">
+                      {book.authorId}
                     </p>
-                    <p className="text-accent font-bold">
-                      Rp {parseFloat(book.price.toString()).toLocaleString("id-ID")}
+                    <p className="font-semibold text-sm">
+                      Rp {parseInt(book.price).toLocaleString("id-ID")}
                     </p>
                   </button>
                 ))}
               </div>
             ) : (
               <div className="text-center py-12">
-                <BookOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <BookOpen className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
                 <p className="text-muted-foreground">
                   Tidak ada buku yang ditemukan
                 </p>

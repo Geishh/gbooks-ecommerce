@@ -37,8 +37,8 @@
 - [x] Dashboard with statistics overview
 
 ## Phase 5: File Storage & Integrations
-- [ ] Book cover image upload to S3
-- [ ] Image display and optimization
+- [x] Book cover image upload to S3
+- [x] Image display and optimization
 - [x] Email notification system for new orders (integrated)
 - [x] Owner notification integration (integrated)
 - [x] Payment simulation in checkout
@@ -61,3 +61,5 @@
 ## Phase 8: Additional Features
 - [x] Add book form in catalog for users
 - [x] Add 10 sample books to catalog
+- [x] Display book cover images in catalog and detail pages
+- [x] S3 storage integration for book cover uploads

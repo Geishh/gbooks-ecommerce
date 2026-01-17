@@ -37,6 +37,7 @@ import {
 } from "./db";
 import { TRPCError } from "@trpc/server";
 import { notifyOwner } from "./_core/notification";
+import { storagePut } from "./storage";
 
 // ============= HELPER PROCEDURES =============
 
@@ -143,6 +144,28 @@ const booksRouter = router({
     .mutation(async ({ input }) => {
       await deleteBook(input.id);
       return { success: true };
+    }),
+
+  uploadCover: adminProcedure
+    .input(
+      z.object({
+        fileName: z.string(),
+        fileData: z.string(),
+        mimeType: z.string().default("image/jpeg"),
+      })
+    )
+    .mutation(async ({ input }) => {
+      try {
+        const buffer = Buffer.from(input.fileData, "base64");
+        const key = `books/covers/${Date.now()}-${input.fileName}`;
+        const result = await storagePut(key, buffer, input.mimeType);
+        return result;
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to upload book cover",
+        });
+      }
     }),
 });
 
