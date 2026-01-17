@@ -57,3 +57,7 @@
 - [x] Hosting instructions (README_GBOOKS.md)
 - [x] Domain setup (via Manus)
 - [x] Environment variables configuration (auto-injected)
+
+
+## Phase 8: Additional Features
+- [x] Add book form in catalog for users

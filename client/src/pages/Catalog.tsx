@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLocation } from "wouter";
 import { useState, useMemo } from "react";
-import { BookOpen, Search } from "lucide-react";
+import { BookOpen, Search, Plus, X } from "lucide-react";
+import { toast } from "sonner";
 
 export default function Catalog() {
   const [, navigate] = useLocation();
@@ -11,10 +12,35 @@ export default function Catalog() {
   const [selectedCategory, setSelectedCategory] = useState<number | undefined>();
   const [selectedAuthor, setSelectedAuthor] = useState<number | undefined>();
   const [selectedPublisher, setSelectedPublisher] = useState<number | undefined>();
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    title: "",
+    description: "",
+    authorId: "",
+    publisherId: "",
+    categoryId: "",
+    price: "",
+    stock: "",
+    isbn: "",
+    coverImageUrl: "",
+    publishedYear: "",
+  });
 
   const { data: categories } = trpc.categories.list.useQuery();
   const { data: authors } = trpc.authors.list.useQuery();
   const { data: publishers } = trpc.publishers.list.useQuery();
+  const { refetch: refetchBooks } = trpc.books.search.useQuery(
+    {
+      query: searchQuery || "a",
+      categoryId: selectedCategory,
+      authorId: selectedAuthor,
+      publisherId: selectedPublisher,
+      limit: 24,
+    },
+    { enabled: true }
+  );
+  const createBookMutation = trpc.books.create.useMutation();
 
   const { data: books, isLoading } = trpc.books.search.useQuery(
     {
@@ -27,23 +53,323 @@ export default function Catalog() {
     { enabled: true }
   );
 
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmitBook = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (
+      !formData.title ||
+      !formData.authorId ||
+      !formData.publisherId ||
+      !formData.categoryId ||
+      !formData.price
+    ) {
+      toast.error("Silakan isi semua field yang diperlukan");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await createBookMutation.mutateAsync({
+        title: formData.title,
+        description: formData.description,
+        authorId: parseInt(formData.authorId),
+        publisherId: parseInt(formData.publisherId),
+        categoryId: parseInt(formData.categoryId),
+        price: formData.price,
+        stock: parseInt(formData.stock) || 0,
+        isbn: formData.isbn,
+        coverImageUrl: formData.coverImageUrl,
+        publishedYear: formData.publishedYear
+          ? parseInt(formData.publishedYear)
+          : undefined,
+      });
+
+      toast.success("Buku berhasil ditambahkan!");
+      setFormData({
+        title: "",
+        description: "",
+        authorId: "",
+        publisherId: "",
+        categoryId: "",
+        price: "",
+        stock: "",
+        isbn: "",
+        coverImageUrl: "",
+        publishedYear: "",
+      });
+      setShowAddForm(false);
+      refetchBooks();
+    } catch (error) {
+      toast.error("Gagal menambahkan buku. Silakan coba lagi.");
+      console.error(error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+  };
+
+  const resetForm = () => {
+    setFormData({
+      title: "",
+      description: "",
+      authorId: "",
+      publisherId: "",
+      categoryId: "",
+      price: "",
+      stock: "",
+      isbn: "",
+      coverImageUrl: "",
+      publishedYear: "",
+    });
+    setShowAddForm(false);
   };
 
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <section className="border-b border-border py-12 md:py-16">
-        <div className="container">
-          <h1 className="text-heading mb-4">Katalog Buku</h1>
-          <p className="text-body text-muted-foreground">
-            Jelajahi ribuan buku dari berbagai kategori dan penulis
-          </p>
+        <div className="container flex items-center justify-between">
+          <div>
+            <h1 className="text-heading mb-4">Katalog Buku</h1>
+            <p className="text-body text-muted-foreground">
+              Jelajahi ribuan buku dari berbagai kategori dan penulis
+            </p>
+          </div>
+          <Button
+            onClick={() => setShowAddForm(true)}
+            className="bg-accent text-accent-foreground hover:bg-accent/90 flex items-center gap-2 whitespace-nowrap"
+          >
+            <Plus className="w-4 h-4" />
+            Tambah Buku
+          </Button>
         </div>
       </section>
 
+      {/* Add Book Modal */}
+      {showAddForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-background border border-border rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-background border-b border-border p-6 flex items-center justify-between">
+              <h2 className="text-heading">Tambah Buku Baru</h2>
+              <button
+                onClick={resetForm}
+                className="p-2 hover:bg-muted/50 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitBook} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Judul Buku *
+                </label>
+                <Input
+                  type="text"
+                  name="title"
+                  placeholder="Masukkan judul buku"
+                  value={formData.title}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Penulis *
+                  </label>
+                  <select
+                    name="authorId"
+                    value={formData.authorId}
+                    onChange={handleInputChange}
+                    className="w-full border border-border px-3 py-2 rounded text-sm"
+                    required
+                  >
+                    <option value="">Pilih Penulis</option>
+                    {authors?.map((author) => (
+                      <option key={author.id} value={author.id}>
+                        {author.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Penerbit *
+                  </label>
+                  <select
+                    name="publisherId"
+                    value={formData.publisherId}
+                    onChange={handleInputChange}
+                    className="w-full border border-border px-3 py-2 rounded text-sm"
+                    required
+                  >
+                    <option value="">Pilih Penerbit</option>
+                    {publishers?.map((pub) => (
+                      <option key={pub.id} value={pub.id}>
+                        {pub.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Kategori *
+                </label>
+                <select
+                  name="categoryId"
+                  value={formData.categoryId}
+                  onChange={handleInputChange}
+                  className="w-full border border-border px-3 py-2 rounded text-sm"
+                  required
+                >
+                  <option value="">Pilih Kategori</option>
+                  {categories?.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Deskripsi
+                </label>
+                <textarea
+                  name="description"
+                  placeholder="Masukkan deskripsi buku"
+                  value={formData.description}
+                  onChange={handleInputChange}
+                  className="w-full border border-border px-3 py-2 rounded text-sm resize-none h-24"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Harga (Rp) *
+                  </label>
+                  <Input
+                    type="number"
+                    name="price"
+                    placeholder="0"
+                    value={formData.price}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Stok
+                  </label>
+                  <Input
+                    type="number"
+                    name="stock"
+                    placeholder="0"
+                    value={formData.stock}
+                    onChange={handleInputChange}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    ISBN
+                  </label>
+                  <Input
+                    type="text"
+                    name="isbn"
+                    placeholder="978-3-16-148410-0"
+                    value={formData.isbn}
+                    onChange={handleInputChange}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Tahun Terbit
+                  </label>
+                  <Input
+                    type="number"
+                    name="publishedYear"
+                    placeholder="2024"
+                    value={formData.publishedYear}
+                    onChange={handleInputChange}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  URL Gambar Cover
+                </label>
+                <Input
+                  type="url"
+                  name="coverImageUrl"
+                  placeholder="https://example.com/image.jpg"
+                  value={formData.coverImageUrl}
+                  onChange={handleInputChange}
+                />
+              </div>
+
+              {formData.coverImageUrl && (
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Preview Gambar
+                  </label>
+                  <img
+                    src={formData.coverImageUrl}
+                    alt="Preview"
+                    className="w-32 h-48 object-cover border border-border rounded"
+                  />
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-4 border-t border-border">
+                <Button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90"
+                >
+                  {isSubmitting ? "Menyimpan..." : "Simpan Buku"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={resetForm}
+                  className="flex-1"
+                >
+                  Batal
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <div className="container py-8 md:py-12">
+        {showAddForm && (
+          <div className="mb-8 p-4 bg-blue-50 border border-blue-200 rounded text-sm text-blue-700">
+            Form tambah buku terbuka di atas halaman
+          </div>
+        )}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Sidebar Filters */}
           <div className="lg:col-span-1 space-y-6">
@@ -177,6 +503,15 @@ export default function Catalog() {
                 Hapus Filter
               </Button>
             )}
+
+            {/* Add Book Button (Mobile) */}
+            <Button
+              onClick={() => setShowAddForm(true)}
+              className="w-full bg-accent text-accent-foreground hover:bg-accent/90 lg:hidden flex items-center justify-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Tambah Buku
+            </Button>
           </div>
 
           {/* Books Grid */}
